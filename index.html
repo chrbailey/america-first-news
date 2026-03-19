@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>America First News — Personalized Edition + Card Intelligence</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f8f7f4; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #root { min-height: 100vh; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    .loading-pulse { animation: pulse 1.5s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useCallback, useMemo, useEffect } = React;
+
+// ── DESIGN TOKENS ──
+const C = {
+  navy: "#0a1628", red: "#b91c1c", bg: "#f8f7f4", card: "#ffffff",
+  meta: "#6b7280", green: "#16a34a", blue: "#2563eb", tagBg: "#fef3c7",
+  tagBorder: "#d97706", consBg: "#f0fdf4", relBg: "#eff6ff", srcBg: "#f9fafb",
+  accentRed: "#dc2626"
+};
+
+// ── RSS SEARCH QUERIES (defined early so profile can reference them) ──
+const DEFAULT_FEED_QUERIES = [
+  '"President Trump" OR "White House" OR MAGA OR "America First" action executive order',
+  'Arizona OR Scottsdale OR "Paradise Valley" OR Phoenix conservative',
+  'Scottsdale "real estate" OR "home remodel" OR "property value" OR "housing market"',
+  '"Class C motorhome" OR "RV living" OR "full time RV" OR "motorhome life"',
+  '"sports cards" OR "card grading" OR PSA OR BGS OR "card value" OR "trading cards"',
+  'ASU internship OR "Arizona State" student opportunity OR scholarship',
+  '"Thompsons disease" OR "Thompson disease" OR myotonia OR "genetic condition" internship research',
+];
+
+function buildFeedUrl(query) {
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+}
+
+// ── MATTHEW'S PROFILE (used by analysis engine, editable, persists in URL hash) ──
+const DEFAULT_PROFILE = {
+  name: "Matt",
+  fullName: "Matthew Stultz",
+  street: "Paradise Valley",
+  city: "Scottsdale",
+  region: "Phoenix Metro",
+  school: "Arizona State University",
+  gradYear: "",
+  degree: "",
+  company: "",
+  role: "Designer / Real Estate",
+  industry: "home remodeling and real estate",
+  kidSchool: "",
+  hobby: "Class C motorhome living, designer remodeling, sports card collecting",
+  causes: "America First, MAGA, supporting the President",
+  extraInterests: "housecats in motorhome, things to do in motorhome, managing daughters in early 20s, ASU internships, Thompsons disease internships",
+  extraFeeds: "",
+  feedQueries: DEFAULT_FEED_QUERIES.join("\n"),
+  // Card Collections (replaces fantasy leagues)
+  cardCollections: JSON.stringify([
+    { id: "", name: "Collection 1", sport: "Football" },
+    { id: "", name: "Collection 2", sport: "Baseball" },
+    { id: "", name: "Collection 3", sport: "Basketball" },
+  ]),
+};
+
+function loadProfile() {
+  try {
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const decoded = JSON.parse(decodeURIComponent(hash));
+      return { ...DEFAULT_PROFILE, ...decoded };
+    }
+  } catch(e) {}
+  return { ...DEFAULT_PROFILE };
+}
+
+function saveProfile(profile) {
+  try {
+    window.location.hash = encodeURIComponent(JSON.stringify(profile));
+  } catch(e) {}
+}
+
+// Mutable reference used by analysis engine (updated when profile changes)
+let USER = loadProfile();
+
+// ── TOPIC CLASSIFICATION ──
+const TOPICS = [
+  { tag: "Trump / MAGA", keywords: ["trump", "maga", "america first", "white house", "president", "executive", "order", "conservative", "republican"], icon: "🇺🇸" },
+  { tag: "Arizona Politics", keywords: ["arizona", "scottsdale", "phoenix", "paradise valley", "local", "conservative", "republican", "gop"], icon: "🏛" },
+  { tag: "Real Estate / Housing", keywords: ["real estate", "housing", "property", "remodel", "home", "builder", "developer", "market"], icon: "🏠" },
+  { tag: "RV / Motorhome Life", keywords: ["rv", "motorhome", "camping", "travel", "full-time", "nomad", "class c"], icon: "🚐" },
+  { tag: "Sports Cards", keywords: ["sports cards", "card", "grading", "psa", "bgs", "collectible", "trading cards", "value"], icon: "🃏" },
+  { tag: "Education / Internship", keywords: ["asu", "internship", "education", "university", "student", "scholarship", "opportunity"], icon: "🎓" },
+  { tag: "Health / Thompson Disease", keywords: ["thompson", "disease", "myotonia", "genetic", "health", "research", "condition"], icon: "⚕️" },
+  { tag: "Business & Tech", keywords: ["startup", "tech", "company", "business", "innovation", "entrepreneurship"], icon: "💼" },
+];
+
+function classifyStory(title, snippet) {
+  const text = (title + " " + (snippet || "")).toLowerCase();
+  for (const t of TOPICS) {
+    if (t.keywords.some(k => text.includes(k))) return t;
+  }
+  return { tag: "America First News", keywords: [], icon: "📰" };
+}
+
+// ── ANALYSIS ENGINE (templated, keyword-driven) ──
+function generateRelevance(title, snippet, topic) {
+  const text = (title + " " + (snippet || "")).toLowerCase();
+  const u = USER;
+  const parts = [];
+
+  // Location hooks
+  if (text.includes("scottsdale")) parts.push(`${u.name}, this directly affects your ${u.street} neighborhood in ${u.city}.`);
+  else if (text.includes("paradise valley")) parts.push(`${u.name}, this is happening in your backyard — Paradise Valley matters to you.`);
+  else if (["phoenix", "arizona", "paradevil valley"].some(c => text.includes(c)))
+    parts.push(`${u.name}, this affects the entire ${u.region} area where you live and work.`);
+  else parts.push(`${u.name}, here's how this connects to your life in ${u.city}.`);
+
+  // Topic-specific hooks
+  if (topic.tag.includes("Trump") || topic.tag.includes("MAGA") || topic.tag.includes("Conservative"))
+    parts.push(`As someone who supports ${u.causes}, this story directly connects to your core values and the vision for the country you want to see.`);
+  else if (topic.tag.includes("Real Estate") || topic.tag.includes("Housing"))
+    parts.push(`With your background in ${u.industry} and your expertise in ${u.region}, real estate policy hits directly at your livelihood and investment portfolio. These market forces shape your business.`);
+  else if (topic.tag.includes("RV") || topic.tag.includes("Motorhome"))
+    parts.push(`As someone who loves ${u.hobby}, this story connects directly to your lifestyle. RV living and motorhome culture are personal passions for you.`);
+  else if (topic.tag.includes("Sports Cards"))
+    parts.push(`With your interest in ${u.hobby}, sports card grading and market trends matter deeply. This is both a hobby and an investment area you follow closely.`);
+  else if (topic.tag.includes("Education") || topic.tag.includes("Internship"))
+    parts.push(`As an ${u.school} graduate, education and internship opportunities resonate with you, especially in Arizona. Supporting the next generation of students matters to you.`);
+  else if (topic.tag.includes("Health"))
+    parts.push(`This connects to your family's interests. With your awareness of ${u.causes} and health policy, these stories inform your worldview and values.`);
+  else if (topic.tag.includes("Arizona"))
+    parts.push(`From your vantage point as a ${u.city} resident and ${u.school} graduate, Arizona politics directly shape your daily life and the region's future.`);
+  else
+    parts.push(`From your perspective as a ${u.city} resident, ${u.school} grad, and ${u.role}, this story connects to the civic and economic dynamics you navigate daily.`);
+
+  // Extra interest hooks
+  const extras = (u.extraInterests || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const matchedExtras = extras.filter(interest => text.includes(interest));
+  if (matchedExtras.length > 0) {
+    parts.push(`\n\nThis also connects to your interest in ${matchedExtras.join(" and ")} — an area you follow closely.`);
+  }
+
+  return parts.join(" ");
+}
+
+function generateConservativeAnalysis(title, snippet, topic) {
+  const text = (title + " " + (snippet || "")).toLowerCase();
+  const parts = [];
+
+  if (topic.tag.includes("Trump") || topic.tag.includes("MAGA")) {
+    parts.push("America First principles focus on putting American citizens and American prosperity first. This policy reflects that commitment — prioritizing Main Street over Wall Street, American workers over global interests, and local control over centralized bureaucracy.");
+    parts.push("\n\nThe question to ask: Does this support or hinder American sovereignty, American jobs, and American security? Every policy should be measured against these three metrics.");
+  } else if (topic.tag.includes("Real Estate") || topic.tag.includes("Housing")) {
+    parts.push("Housing markets thrive when government gets out of the way. Reduce regulatory barriers, streamline permitting, let the market build to demand, and stop imposing price controls that reduce supply. This is how you create affordable housing.");
+    parts.push("\n\nGood policy supports builders, encourages investment, protects property rights, and trusts markets more than bureaucrats. Arizona's real estate success comes from relative freedom — protect that advantage.");
+  } else if (topic.tag.includes("Arizona") || topic.tag.includes("Conservative")) {
+    parts.push("Arizona politics are shaped by liberty-minded residents who value independence, fiscal responsibility, and local control. The America First movement is particularly strong in Arizona because Arizonans understand that Washington doesn't solve Arizona problems.");
+    parts.push("\n\nThe conservative principle: decisions should be made as close to home as possible. Phoenix/Scottsdale should lead Maricopa County. Arizona should lead Washington. That's good government.");
+  } else if (topic.tag.includes("Education")) {
+    parts.push("Schools should teach core academics — reading, math, science, history. Every other agenda should take a backseat. With a school like ASU setting the standard, Arizona universities should focus on producing graduates who can think, work, and compete globally.");
+    parts.push("\n\nInternship and career opportunities should flow from strong fundamentals. Arizona students deserve employers who recognize their quality and hire aggressively.");
+  } else if (topic.tag.includes("RV") || topic.tag.includes("Motorhome")) {
+    parts.push("RV living represents American freedom — the ability to own your home, travel where you want, and live life on your terms. Policy should protect this lifestyle: reasonable campground regulations, infrastructure investment, and respect for private property rights.");
+    parts.push("\n\nThe conservative case for supporting RV culture is straightforward: it's about personal freedom, entrepreneurial lifestyles, and the American dream of mobility and independence.");
+  } else if (topic.tag.includes("Sports Cards")) {
+    parts.push("Sports card collecting and grading represent a legitimate hobby and investment market. Fair valuation, transparent grading standards, and market-driven pricing create healthy ecosystems for collectors.");
+    parts.push("\n\nGovernment has no business regulating hobby markets or imposing restrictions on private collectibles. Let the market work, let competition improve quality, and let collectors enjoy their passion.");
+  } else {
+    parts.push("The America First framework asks: Does this policy put Americans first? Does it respect property rights and personal freedom? Does it strengthen our community? Does it support American prosperity?");
+    parts.push("\n\nApply these principles and you'll find the answer most Americans already know.");
+  }
+
+  return parts.join("");
+}
+
+// ── RSS FEED FETCHING via rss2json.com (free, CORS-friendly, no proxy needed) ──
+const RSS_FEEDS = DEFAULT_FEED_QUERIES.map(buildFeedUrl);
+
+function extractSource(title) {
+  const match = title.match(/\s+-\s+(.+)$/);
+  return match ? match[1].trim() : "Google News";
+}
+
+function cleanTitle(title) {
+  return title.replace(/\s+-\s+[^-]+$/, "").trim();
+}
+
+function extractDesc(html) {
+  if (!html) return "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  const text = div.textContent.trim();
+  return cleanTitle(text).slice(0, 300);
+}
+
+async function fetchFeed(rssUrl) {
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  try {
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (data.status !== "ok" || !data.items) return [];
+    return data.items.map(item => ({
+      title: cleanTitle(item.title || ""),
+      link: item.link || "",
+      desc: extractDesc(item.description || item.content || ""),
+      pubDate: new Date(item.pubDate || Date.now()),
+      source: extractSource(item.title || ""),
+    }));
+  } catch(e) {
+    console.warn("Feed fetch failed:", rssUrl, e);
+    return [];
+  }
+}
+
+async function fetchAllFeeds() {
+  const results = await Promise.allSettled(RSS_FEEDS.map(url => fetchFeed(url)));
+  const all = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+  const seen = new Set();
+  const unique = all.filter(item => {
+    if (!item.title) return false;
+    const key = item.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  unique.sort((a, b) => b.pubDate - a.pubDate);
+  return unique.slice(0, 30);
+}
+
+function rssToStory(item, id) {
+  const topic = classifyStory(item.title, item.desc);
+  const hoursAgo = Math.max(0.5, (Date.now() - item.pubDate.getTime()) / 3600000);
+  return {
+    id,
+    title: item.title.replace(/ - [^-]+$/, "").trim(),
+    domain: item.source,
+    url: item.link,
+    tag: topic.tag,
+    icon: topic.icon,
+    points: Math.floor(Math.random() * 400 + 100),
+    user: item.source.replace(/\.(com|org|net|gov|io|edu)$/i, "").replace(/[^a-zA-Z]/g, ""),
+    time: hoursAgo,
+    commentCount: Math.floor(Math.random() * 300 + 50),
+    summary: item.desc || "Read the full article for details.",
+    relevance: generateRelevance(item.title, item.desc, topic),
+    conservative: generateConservativeAnalysis(item.title, item.desc, topic),
+    sources: [
+      { text: "Original reporting", src: item.source },
+      { text: "Published " + item.pubDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), src: item.source }
+    ],
+    isLive: true
+  };
+}
+
+// ── FEATURED STORIES (hardcoded, always shown) ──
+const FEATURED = [
+  {
+    id: 9001,
+    title: "How to Support America First: Get Involved with Arizona Republican Party and Campaign Volunteering",
+    domain: "azgop.org", url: "#", tag: "Trump / MAGA", icon: "🇺🇸",
+    points: 445, user: "AmericaFirstNews", time: 24, commentCount: 312, isFeatured: true,
+    summary: "There are concrete ways to support America First policies right now. Contact your local Arizona Republican Party chapter to volunteer for upcoming campaigns. You can help with voter outreach, event coordination, or fundraising. Many chapters in Maricopa County need volunteers for the next election cycle. Visit azgop.org to find your local chapter and sign up.",
+    sources: [
+      { text: "Arizona Republican Party", src: "azgop.org" },
+      { text: "Maricopa County Republican Committee", src: "Local GOP chapters" },
+      { text: "Volunteer opportunities", src: "Campaign organization" }
+    ],
+    relevance: generateRelevance("Arizona Republican Party volunteer campaign", "Arizona Republican", { tag: "Trump / MAGA" }),
+    conservative: generateConservativeAnalysis("Arizona Republican Party volunteer", "volunteer campaign", { tag: "Trump / MAGA" })
+  },
+  {
+    id: 9002,
+    title: "Border Security and America First: Actions Citizens Can Take to Support Administration Priorities",
+    domain: "whitehouse.gov", url: "#", tag: "Trump / MAGA", icon: "🇺🇸",
+    points: 389, user: "AmericaFirstNews", time: 48, commentCount: 245, isFeatured: true,
+    summary: "Supporting border security and America First policies starts locally. You can: attend town halls with elected officials to voice support for strong border policies, join community security initiatives, contact legislators to express support for border enforcement funding, and support organizations dedicated to election integrity and national security. Individual citizens have real influence when they organize and speak up.",
+    sources: [
+      { text: "White House America First agenda", src: "whitehouse.gov" },
+      { text: "Border security policy", src: "Executive branch statements" },
+      { text: "Citizen advocacy", src: "Community organization" }
+    ],
+    relevance: generateRelevance("border security America First policy citizen action", "border security", { tag: "Trump / MAGA" }),
+    conservative: generateConservativeAnalysis("border security America First citizen support", "border security", { tag: "Trump / MAGA" })
+  },
+  {
+    id: 9003,
+    title: "Buy American, Support America First Economy: How Consumers Can Back Domestic Businesses",
+    domain: "americafirst.com", url: "#", tag: "Trump / MAGA", icon: "🇺🇸",
+    points: 512, user: "AmericaFirstNews", time: 72, commentCount: 467, isFeatured: true,
+    summary: "America First economics means supporting American businesses and American workers. Buy products made in America when possible. Support local Arizona businesses over multinational corporations when you have a choice. Choose companies that manufacture in the US, hire American workers, and reinvest in our communities. Your purchasing power is a vote for the kind of economy you want to see.",
+    sources: [
+      { text: "Buy American campaign", src: "America First advocacy" },
+      { text: "Supporting domestic manufacturing", src: "Economic policy" },
+      { text: "Local business support", src: "Community commerce" }
+    ],
+    relevance: generateRelevance("Buy American economic policy support", "Buy American", { tag: "Trump / MAGA" }),
+    conservative: generateConservativeAnalysis("Buy American America First economy", "Buy American domestic", { tag: "Trump / MAGA" })
+  }
+];
+
+// ── TIME FORMATTING ──
+const timeAgo = (h) => {
+  if (h < 1) return `${Math.floor(h * 60)}m ago`;
+  if (h < 24) return `${Math.floor(h)}h ago`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "yesterday" : `${d}d ago`;
+};
+
+// ── COMPONENTS ──
+const SourceList = ({ sources }) => (
+  <div style={{ backgroundColor: C.srcBg, border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 14px", marginTop: 10 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: C.navy, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Verified Sources</div>
+    {sources.map((s, i) => (
+      <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 4, display: "flex", gap: 6 }}>
+        <span style={{ color: C.green, flexShrink: 0 }}>✓</span>
+        <span><strong>{s.text}</strong> — <em style={{ color: C.meta }}>{s.src}</em></span>
+      </div>
+    ))}
+  </div>
+);
+
+const AnalysisBox = ({ type, content }) => {
+  const isRel = type === "relevance";
+  return (
+    <div style={{
+      backgroundColor: isRel ? C.relBg : C.consBg,
+      border: `1px solid ${isRel ? "#bfdbfe" : "#bbf7d0"}`,
+      borderRadius: 6, padding: "14px 16px", marginTop: 10
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, color: isRel ? C.blue : "#15803d" }}>
+        {isRel ? `📍 Why This Matters to ${USER.name || "You"}` : "🇺🇸 America First Analysis"}
+      </div>
+      <div style={{ fontSize: 13.5, lineHeight: 1.65, color: "#1f2937", whiteSpace: "pre-line" }}>{content}</div>
+    </div>
+  );
+};
+
+const StoryCard = ({ story, rank, onOpen }) => (
+  <div className="fade-in" style={{
+    backgroundColor: C.card, padding: "12px 16px", marginBottom: 2,
+    borderBottom: "1px solid #e5e7eb", cursor: "pointer"
+  }} onClick={() => onOpen(story.id)}>
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ color: C.meta, fontSize: 14, fontWeight: 600, minWidth: 28, textAlign: "right", paddingTop: 2 }}>{rank}.</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 600, backgroundColor: C.tagBg, color: "#92400e", padding: "1px 8px", borderRadius: 3, border: `1px solid ${C.tagBorder}` }}>
+            {story.icon || "📰"} {story.tag}
+          </span>
+          {story.isFeatured && <span style={{ fontSize: 9, fontWeight: 700, backgroundColor: C.red, color: "#fff", padding: "1px 6px", borderRadius: 3 }}>FEATURED</span>}
+          {story.isLive && <span style={{ fontSize: 9, fontWeight: 700, backgroundColor: "#dbeafe", color: C.blue, padding: "1px 6px", borderRadius: 3 }}>LIVE</span>}
+          <span style={{ fontSize: 15, fontWeight: 500, color: C.navy, lineHeight: 1.3 }}>{story.title}</span>
+        </div>
+        <div style={{ fontSize: 11, color: C.meta, marginTop: 4 }}>
+          {story.points} pts · {story.domain} · {timeAgo(story.time)} · <span style={{ color: C.navy, fontWeight: 500 }}>{story.commentCount} comments</span>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const ThreadView = ({ story, onBack }) => (
+  <div className="fade-in" style={{ padding: "0 0 40px 0" }}>
+    <div style={{ padding: "16px 20px", backgroundColor: C.card, borderBottom: "1px solid #e5e7eb" }}>
+      <div onClick={onBack} style={{ fontSize: 12, color: C.blue, cursor: "pointer", marginBottom: 10 }}>← Back to Front Page</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, backgroundColor: C.tagBg, color: "#92400e", padding: "1px 8px", borderRadius: 3, border: `1px solid ${C.tagBorder}` }}>{story.icon} {story.tag}</span>
+        {story.isFeatured && <span style={{ fontSize: 9, fontWeight: 700, backgroundColor: C.red, color: "#fff", padding: "1px 6px", borderRadius: 3 }}>FEATURED</span>}
+        {story.isLive && <span style={{ fontSize: 9, fontWeight: 700, backgroundColor: "#dbeafe", color: C.blue, padding: "1px 6px", borderRadius: 3 }}>LIVE</span>}
+      </div>
+      <h1 style={{ fontSize: 20, fontWeight: 600, color: C.navy, margin: "0 0 6px 0", lineHeight: 1.35 }}>{story.title}</h1>
+      <div style={{ fontSize: 11, color: C.meta }}>
+        {story.points} pts · {story.domain} · {timeAgo(story.time)} · {story.commentCount} comments
+        {story.url && story.url !== "#" && <span> · <a href={story.url} target="_blank" rel="noopener" style={{ color: C.blue }}>Read original ↗</a></span>}
+      </div>
+    </div>
+    <div style={{ padding: "0 20px" }}>
+      <div style={{ fontSize: 14, lineHeight: 1.65, color: "#1f2937", marginTop: 16, padding: "14px 16px", backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: 6 }}>
+        {story.summary}
+      </div>
+      <SourceList sources={story.sources} />
+      <AnalysisBox type="relevance" content={story.relevance} />
+      <AnalysisBox type="conservative" content={story.conservative} />
+    </div>
+  </div>
+);
+
+const WelcomeBanner = () => {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div style={{ background: `linear-gradient(135deg, ${C.navy} 0%, #1e3a5f 100%)`, padding: "16px 20px", position: "relative", borderBottom: `3px solid ${C.red}` }}>
+      <button onClick={() => setDismissed(true)} style={{ position: "absolute", top: 8, right: 12, background: "none", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer" }}>×</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 36 }}>🇺🇸</div>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.red }}>America First News</div>
+          <div style={{ fontSize: 13, color: "#cbd5e1", marginTop: 2, lineHeight: 1.5 }}>
+            Your personalized conservative news + sports card intelligence.
+            <br/><span style={{ fontSize: 11, color: "#94a3b8" }}>Click "Customize Profile" to personalize. Every story analyzed for you.</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 10, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 11, color: "#94a3b8" }}>
+        <span><span style={{ color: C.green }}>●</span> Live RSS Feeds</span>
+        <span><span style={{ color: C.blue }}>●</span> Conservative Analysis</span>
+        <span><span style={{ color: C.red }}>●</span> Personalized Relevance</span>
+        <span><span style={{ color: "#c084fc" }}>●</span> Card Grading Intel</span>
+      </div>
+    </div>
+  );
+};
+
+// Nav filter categories
+const NAV_FILTERS = {
+  "All": null,
+  "MAGA": ["Trump", "MAGA", "America First", "White House", "Executive", "Conservative", "Republican"],
+  "Arizona": ["Arizona", "Scottsdale", "Phoenix", "Paradise Valley", "Local"],
+  "Real Estate": ["Real Estate", "Housing", "Remodel", "Property"],
+  "RV Life": ["RV", "Motorhome", "Camping", "Travel"],
+  "Cards": ["Sports Cards", "Card", "Grading", "Collectible"],
+  "Family": ["ASU", "Internship", "Education", "Thompson", "Health"],
+};
+
+function storyMatchesFilter(story, filterKey) {
+  if (!filterKey || filterKey === "All") return true;
+  const keywords = NAV_FILTERS[filterKey] || [];
+  const tag = (story.tag || "").toLowerCase();
+  return keywords.some(k => tag.toLowerCase().includes(k.toLowerCase()));
+}
+
+const Header = ({ onHome, lastRefresh, activeFilter, onFilter, onEditFeeds, feedEditorOpen, onCards, cardsActive }) => (
+  <div style={{ backgroundColor: C.navy, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => { onFilter("All"); onHome(); }}>
+      <div style={{ width: 34, height: 34, borderRadius: 4, backgroundColor: C.red, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 17, color: "#fff" }}>AF</div>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff", lineHeight: 1.1 }}>America First News</div>
+        <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 0.5 }}>
+          PERSONALIZED EDITION · AMERICA FIRST · LIVE FEEDS
+        </div>
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 4, fontSize: 12, alignItems: "center", flexWrap: "wrap" }}>
+      {Object.keys(NAV_FILTERS).map(s => {
+        const isActive = !cardsActive && (activeFilter === s || (!activeFilter && s === "All"));
+        return (
+          <span key={s} onClick={() => { onFilter(s); onHome(); }} style={{
+            cursor: "pointer",
+            padding: "4px 10px",
+            borderRadius: 4,
+            backgroundColor: isActive ? C.red : "transparent",
+            color: isActive ? "#fff" : "#cbd5e1",
+            fontWeight: isActive ? 600 : 400,
+            transition: "all 0.15s"
+          }}>{s}</span>
+        );
+      })}
+      <span onClick={onCards} style={{
+        cursor: "pointer",
+        padding: "4px 10px",
+        borderRadius: 4,
+        backgroundColor: cardsActive ? "#c084fc" : "transparent",
+        color: cardsActive ? "#fff" : "#cbd5e1",
+        fontWeight: cardsActive ? 600 : 400,
+        transition: "all 0.15s"
+      }}>🃏 Cards</span>
+    </div>
+  </div>
+);
+
+const LoadingState = () => (
+  <div style={{ padding: "40px 20px", textAlign: "center" }}>
+    <div className="loading-pulse" style={{ fontSize: 32, marginBottom: 12 }}>📰</div>
+    <div style={{ color: C.meta, fontSize: 13 }}>Fetching live stories...</div>
+  </div>
+);
+
+const ProfileEditor = ({ profile, onSave, onClose }) => {
+  const [p, setP] = useState(profile);
+  return (
+    <div style={{ margin: "10px 16px", padding: "16px 20px", backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: 6 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.navy }}>Customize Your Profile</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {[
+          { key: "name", label: "Display Name" },
+          { key: "fullName", label: "Full Name" },
+          { key: "street", label: "Neighborhood" },
+          { key: "city", label: "City" },
+          { key: "region", label: "Region" },
+          { key: "role", label: "Role / Title" },
+          { key: "industry", label: "Industry" },
+          { key: "hobby", label: "Hobbies & Interests" },
+          { key: "causes", label: "Causes You Support" },
+          { key: "extraInterests", label: "Extra Interests (comma-separated)" },
+        ].map(({ key, label }) => (
+          <div key={key}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 4 }}>{label}</label>
+            <input type="text" value={p[key]} onChange={e => setP({...p, [key]: e.target.value})} style={{
+              width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, fontFamily: "inherit"
+            }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <button onClick={() => onSave(p)} style={{
+          padding: "8px 16px", backgroundColor: C.green, color: "#fff", border: "none",
+          borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
+        }}>Save Profile</button>
+        <button onClick={onClose} style={{
+          padding: "8px 16px", backgroundColor: "#e5e7eb", color: C.navy, border: "none",
+          borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
+        }}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+const FeedEditor = ({ profile, onSave, onClose }) => {
+  const [feedQueries, setFeedQueries] = useState(profile.feedQueries);
+  const [extraFeeds, setExtraFeeds] = useState(profile.extraFeeds);
+  return (
+    <div style={{ margin: "10px 16px", padding: "16px 20px", backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: 6 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: C.navy }}>Customize News Feeds</div>
+      <div>
+        <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 4 }}>Search Queries (one per line)</label>
+        <textarea value={feedQueries} onChange={e => setFeedQueries(e.target.value)} style={{
+          width: "100%", minHeight: 120, padding: "8px 12px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4, fontFamily: "monospace"
+        }} />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 4 }}>Extra Feed Searches (comma-separated)</label>
+        <input type="text" value={extraFeeds} onChange={e => setExtraFeeds(e.target.value)} style={{
+          width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, fontFamily: "inherit"
+        }} />
+      </div>
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <button onClick={() => onSave({...profile, feedQueries, extraFeeds})} style={{
+          padding: "8px 16px", backgroundColor: C.green, color: "#fff", border: "none",
+          borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
+        }}>Save Feeds</button>
+        <button onClick={onClose} style={{
+          padding: "8px 16px", backgroundColor: "#e5e7eb", color: C.navy, border: "none",
+          borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
+        }}>Cancel</button>
+      </div>
+    </div>
+  );
+};
+
+// ── SPORTS CARD GRADER COMPONENTS ──
+
+const CardGrader = ({ onSaveCard }) => {
+  const [playerName, setPlayerName] = useState("");
+  const [year, setYear] = useState("");
+  const [brand, setBrand] = useState("Topps");
+  const [cardNumber, setCardNumber] = useState("");
+  const [sport, setSport] = useState("Football");
+  const [centering, setCentering] = useState(7);
+  const [corners, setCorners] = useState(7);
+  const [edges, setEdges] = useState(7);
+  const [surface, setSurface] = useState(7);
+
+  const computeGrade = () => {
+    const grade = (centering * 0.15 + corners * 0.30 + edges * 0.25 + surface * 0.30);
+    return Math.round(grade * 2) / 2; // round to nearest 0.5
+  };
+
+  const gradeToLabel = (g) => {
+    if (g >= 9.5) return "Gem Mint";
+    if (g >= 9) return "Mint";
+    if (g >= 8.5) return "NM-MT+";
+    if (g >= 8) return "NM-MT";
+    if (g >= 7) return "NM";
+    if (g >= 6) return "EX-MT";
+    if (g >= 5) return "EX";
+    if (g >= 4) return "VG-EX";
+    if (g >= 3) return "VG";
+    if (g >= 2) return "Good";
+    return "Poor";
+  };
+
+  const gradeToMultiplier = (g) => {
+    if (g >= 9.5) return "10-15x";
+    if (g >= 9) return "5-10x";
+    if (g >= 8) return "2-5x";
+    if (g >= 7) return "1-2x";
+    return "0.5-1x";
+  };
+
+  const computedGrade = computeGrade();
+  const label = gradeToLabel(computedGrade);
+
+  const handleSave = () => {
+    if (!playerName || !year) {
+      alert("Please fill in player name and year");
+      return;
+    }
+    onSaveCard({
+      playerName, year, brand, cardNumber, sport,
+      centering, corners, edges, surface, grade: computedGrade, label
+    });
+    setPlayerName("");
+    setYear("");
+    setCardNumber("");
+    setCentering(7);
+    setCorners(7);
+    setEdges(7);
+    setSurface(7);
+  };
+
+  return (
+    <div style={{ padding: "16px 20px", backgroundColor: C.card }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Grade a Card</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Player Name *</label>
+          <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="e.g., Tom Brady" style={{
+            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
+          }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Year *</label>
+          <input type="text" value={year} onChange={e => setYear(e.target.value)} placeholder="e.g., 2000" style={{
+            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
+          }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Brand</label>
+          <select value={brand} onChange={e => setBrand(e.target.value)} style={{
+            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
+          }}>
+            <option>Topps</option>
+            <option>Panini</option>
+            <option>Upper Deck</option>
+            <option>Bowman</option>
+            <option>Donruss</option>
+            <option>Fleer</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Card #</label>
+          <input type="text" value={cardNumber} onChange={e => setCardNumber(e.target.value)} placeholder="e.g., 1" style={{
+            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
+          }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Sport</label>
+          <select value={sport} onChange={e => setSport(e.target.value)} style={{
+            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
+          }}>
+            <option>Football</option>
+            <option>Baseball</option>
+            <option>Basketball</option>
+            <option>Hockey</option>
+          </select>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 12 }}>Condition Assessment</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        {[
+          { label: "Centering", val: centering, set: setCentering, desc: "How well centered is the image?" },
+          { label: "Corners", val: corners, set: setCorners, desc: "Sharpness of corners" },
+          { label: "Edges", val: edges, set: setEdges, desc: "Condition of edges" },
+          { label: "Surface", val: surface, set: setSurface, desc: "Surface quality (no scratches)" }
+        ].map(({ label, val, set, desc }) => (
+          <div key={label}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: C.navy, marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 10, color: C.meta, marginBottom: 6 }}>{desc}</div>
+            <input type="range" min="0" max="10" step="0.5" value={val} onChange={e => set(parseFloat(e.target.value))} style={{ width: "100%", marginBottom: 4 }} />
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{val} / 10</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "16px", backgroundColor: "#f3f4f6", borderRadius: 6, marginBottom: 16, textAlign: "center" }}>
+        <div style={{ fontSize: 11, color: C.meta, marginBottom: 8 }}>Computed Grade (PSA Scale)</div>
+        <div style={{ fontSize: 32, fontWeight: 700, color: C.red, marginBottom: 4 }}>{computedGrade}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.navy, marginBottom: 8 }}>{label}</div>
+        <div style={{ fontSize: 11, color: C.meta }}>Est. Value Multiplier: {gradeToMultiplier(computedGrade)}</div>
+      </div>
+
+      <button onClick={handleSave} style={{
+        width: "100%", padding: "10px", backgroundColor: C.green, color: "#fff", border: "none",
+        borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
+      }}>Save to Collection</button>
+    </div>
+  );
+};
+
+const CollectionView = ({ cards, onSort }) => {
+  const [sortBy, setSortBy] = useState("grade");
+  const sorted = [...cards].sort((a, b) => {
+    if (sortBy === "grade") return b.grade - a.grade;
+    if (sortBy === "name") return a.playerName.localeCompare(b.playerName);
+    if (sortBy === "year") return parseInt(b.year) - parseInt(a.year);
+    return 0;
+  });
+
+  const avgGrade = cards.length > 0 ? (cards.reduce((sum, c) => sum + c.grade, 0) / cards.length).toFixed(1) : 0;
+
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.navy }}>My Collection</div>
+          <div style={{ fontSize: 11, color: C.meta, marginTop: 2 }}>{cards.length} cards · Avg Grade: {avgGrade}</div>
+        </div>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+          padding: "4px 8px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4
+        }}>
+          <option value="grade">Sort by Grade</option>
+          <option value="name">Sort by Name</option>
+          <option value="year">Sort by Year</option>
+        </select>
+      </div>
+
+      {cards.length === 0 ? (
+        <div style={{ padding: "20px", textAlign: "center", color: C.meta, backgroundColor: C.card, borderRadius: 6 }}>
+          <div style={{ fontSize: 13 }}>No cards graded yet. Start by grading a card above!</div>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+          {sorted.map((card, i) => (
+            <div key={i} style={{
+              backgroundColor: C.card, border: "1px solid #e5e7eb", borderRadius: 6, padding: "12px",
+              textAlign: "center"
+            }}>
+              <div style={{ fontSize: 10, color: C.meta, marginBottom: 4 }}>{card.year} {card.brand}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 8 }}>{card.playerName}</div>
+              <div style={{
+                width: 60, height: 60, margin: "0 auto 8px", borderRadius: 4, backgroundColor: "#f3f4f6",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24
+              }}>🃏</div>
+              <div style={{
+                fontSize: 18, fontWeight: 700, color: C.red, marginBottom: 4
+              }}>{card.grade}</div>
+              <div style={{ fontSize: 10, color: C.meta }}>{card.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CardDashboard = ({ profile, onSaveProfile }) => {
+  const [tab, setTab] = useState("grade");
+  const [cards, setCards] = useState(() => {
+    try {
+      return JSON.parse(profile.cardCollections || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const handleSaveCard = (card) => {
+    const updated = [...cards, card];
+    setCards(updated);
+  };
+
+  return (
+    <div style={{ paddingBottom: 40 }}>
+      <div style={{ display: "flex", gap: 2, backgroundColor: C.card, borderBottom: "1px solid #e5e7eb" }}>
+        {[
+          { id: "grade", label: "Grade a Card", emoji: "✏️" },
+          { id: "collection", label: "My Collection", emoji: "📚" },
+          { id: "market", label: "Market Intel", emoji: "📊" },
+          { id: "guide", label: "Grading Guide", emoji: "📖" }
+        ].map(({ id, label, emoji }) => (
+          <div key={id} onClick={() => setTab(id)} style={{
+            flex: 1, padding: "12px 16px", textAlign: "center", cursor: "pointer",
+            backgroundColor: tab === id ? C.navy : "transparent",
+            color: tab === id ? "#fff" : C.meta,
+            fontWeight: tab === id ? 600 : 400,
+            fontSize: 12
+          }}>
+            {emoji} {label}
+          </div>
+        ))}
+      </div>
+
+      {tab === "grade" && <CardGrader onSaveCard={handleSaveCard} />}
+      {tab === "collection" && <CollectionView cards={cards} />}
+      {tab === "market" && (
+        <div style={{ padding: "16px 20px" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Market Intel</div>
+          <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, color: C.meta, fontSize: 12 }}>
+            Sports card market news and trending values coming from live RSS feeds. Popular brands like PSA-graded cards typically see 5-10x premium for gem mint condition. Keep an eye on rookie cards and star players for emerging trends.
+          </div>
+        </div>
+      )}
+      {tab === "guide" && (
+        <div style={{ padding: "16px 20px" }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Grading Guide</div>
+          <div style={{ display: "grid", gap: 12 }}>
+            {[
+              { grade: "10", label: "Gem Mint", desc: "Virtually perfect card. Flawless centering, sharp corners, pristine surface." },
+              { grade: "9", label: "Mint", desc: "Excellent card with minor imperfections only visible under magnification." },
+              { grade: "8", label: "NM-MT", desc: "Sharp corners and clean surface. Slight imperfections when examined closely." },
+              { grade: "7", label: "NM", desc: "Nice card with well-centered image. Minor wear visible but overall attractive." },
+              { grade: "6", label: "EX-MT", desc: "Good card with visible wear. Edges and corners show slight rounding." },
+              { grade: "5", label: "EX", desc: "Notable wear on all condition factors. Still displays well overall." },
+              { grade: "4", label: "VG-EX", desc: "Significant wear. Heavy corner/edge wear, possible creasing." },
+              { grade: "3", label: "VG", desc: "Well-played card. Heavy wear throughout." },
+            ].map(({ grade, label, desc }) => (
+              <div key={grade} style={{ backgroundColor: C.card, padding: "12px", borderRadius: 6, borderLeft: `4px solid ${C.red}` }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4 }}>{grade}/10 — {label}</div>
+                <div style={{ fontSize: 11, color: C.meta }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Footer = () => (
+  <div style={{ borderTop: `3px solid ${C.red}`, padding: "20px", textAlign: "center", backgroundColor: C.navy, marginTop: 20 }}>
+    <div style={{ color: C.red, fontSize: 14, fontWeight: 600, marginBottom: 6 }}>America First News</div>
+    <div style={{ color: "#94a3b8", fontSize: 12, marginBottom: 10 }}>Live RSS feeds refresh on every visit · Customize via profile editor</div>
+    <div style={{ color: "#64748b", fontSize: 10, marginBottom: 6 }}>Scottsdale · Phoenix Metro · Paradise Valley · Arizona</div>
+    <div style={{ color: "#475569", fontSize: 10 }}>Fork this project on GitHub and make it your own.</div>
+  </div>
+);
+
+// ── MAIN APP ──
+window.__App = function AmericaFirstNewsLive() {
+  const [view, setView] = useState({ type: "home" });
+  const [liveStories, setLiveStories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [activeFilter, setActiveFilter] = useState("All");
+  const [profile, setProfile] = useState(() => loadProfile());
+  const [showEditor, setShowEditor] = useState(false);
+  const [showFeedEditor, setShowFeedEditor] = useState(false);
+  const [feedVersion, setFeedVersion] = useState(0);
+
+  // Build dynamic feed list from profile's feedQueries + extraFeeds
+  const feedUrls = useMemo(() => {
+    const queries = (profile.feedQueries || DEFAULT_FEED_QUERIES.join("\n")).split("\n").filter(Boolean);
+    const base = queries.map(buildFeedUrl);
+    const extra = (profile.extraFeeds || "").split(",").map(s => s.trim()).filter(Boolean);
+    extra.forEach(term => {
+      base.push(buildFeedUrl(term));
+    });
+    return base;
+  }, [profile.feedQueries, profile.extraFeeds, feedVersion]);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.allSettled(feedUrls.map(url => fetchFeed(url))).then(results => {
+      const all = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      const seen = new Set();
+      const unique = all.filter(item => {
+        if (!item.title) return false;
+        const key = item.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      unique.sort((a, b) => b.pubDate - a.pubDate);
+      const stories = unique.slice(0, 40).map((item, i) => rssToStory(item, 1000 + i));
+      setLiveStories(stories);
+      setLastRefresh(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }));
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
+      setLastRefresh("feeds unavailable — showing featured stories");
+    });
+  }, [feedUrls]);
+
+  const handleSaveProfile = useCallback((newProfile) => {
+    USER = { ...newProfile };
+    setProfile(newProfile);
+    saveProfile(newProfile);
+    setShowEditor(false);
+    setShowFeedEditor(false);
+    setFeedVersion(v => v + 1);
+  }, []);
+
+  const allStories = useMemo(() => {
+    const combined = [];
+    const feat = [...FEATURED];
+    const live = [...liveStories];
+    if (feat.length > 0) combined.push(feat.shift());
+    while (live.length > 0 || feat.length > 0) {
+      for (let i = 0; i < 3 && live.length > 0; i++) combined.push(live.shift());
+      if (feat.length > 0) combined.push(feat.shift());
+    }
+    return combined;
+  }, [liveStories]);
+
+  const filteredStories = useMemo(() => {
+    if (!activeFilter || activeFilter === "All") return allStories;
+    return allStories.filter(s => storyMatchesFilter(s, activeFilter));
+  }, [allStories, activeFilter]);
+
+  const goHome = useCallback(() => { setView({ type: "home" }); window.scrollTo(0, 0); }, []);
+  const openStory = useCallback((id) => { setView({ type: "thread", storyId: id }); window.scrollTo(0, 0); }, []);
+  const handleFilter = useCallback((f) => { setActiveFilter(f); setView({ type: "home" }); window.scrollTo(0, 0); }, []);
+  const goCards = useCallback(() => { setView({ type: "cards" }); window.scrollTo(0, 0); }, []);
+  const activeStory = view.type === "thread" ? allStories.find(s => s.id === view.storyId) : null;
+
+  return (
+    <div style={{ backgroundColor: C.bg, maxWidth: 900, margin: "0 auto", minHeight: "100vh", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <Header onHome={goHome} lastRefresh={lastRefresh} activeFilter={activeFilter} onFilter={handleFilter} onEditFeeds={() => { setShowFeedEditor(e => !e); setShowEditor(false); }} feedEditorOpen={showFeedEditor} onCards={goCards} cardsActive={view.type === "cards"} />
+      <WelcomeBanner />
+      {view.type === "cards" ? (
+        <div>
+          <CardDashboard profile={profile} onSaveProfile={handleSaveProfile} />
+          <Footer />
+        </div>
+      ) : view.type === "home" ? (
+        <div>
+          <div style={{ margin: "10px 16px", padding: "10px 14px", backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11, color: C.meta }}>
+              <span><span style={{ color: C.green }}>✓</span> Sourced claims</span>
+              <span><span style={{ color: C.blue }}>■</span> LIVE = Fresh from RSS</span>
+              <span><span style={{ color: C.red }}>■</span> FEATURED = Curated</span>
+              <span>{liveStories.length} live stories</span>
+            </div>
+            <button onClick={() => { setShowEditor(e => !e); setShowFeedEditor(false); }} style={{
+              padding: "5px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+              backgroundColor: showEditor ? C.red : "#f1f5f9", color: showEditor ? "#fff" : C.meta,
+              border: showEditor ? "none" : "1px solid #d1d5db", borderRadius: 4
+            }}>{showEditor ? "Close Editor" : "Customize Profile"}</button>
+          </div>
+          {showEditor && <ProfileEditor profile={profile} onSave={handleSaveProfile} onClose={() => setShowEditor(false)} />}
+          {showFeedEditor && <FeedEditor profile={profile} onSave={handleSaveProfile} onClose={() => setShowFeedEditor(false)} />}
+          {activeFilter && activeFilter !== "All" && (
+            <div style={{ margin: "0 16px 8px", padding: "8px 14px", backgroundColor: C.navy, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: "#fff", fontWeight: 500 }}>
+                Showing: <strong style={{ color: C.red }}>{activeFilter}</strong> ({filteredStories.length} {filteredStories.length === 1 ? "story" : "stories"})
+              </span>
+              <span onClick={() => handleFilter("All")} style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer", textDecoration: "underline" }}>Show all</span>
+            </div>
+          )}
+          {loading ? <LoadingState /> : filteredStories.length > 0 ? filteredStories.map((s, i) => (
+            <StoryCard key={s.id} story={s} rank={i + 1} onOpen={openStory} />
+          )) : (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: C.meta }}>
+              <div style={{ fontSize: 14 }}>No stories match "<strong>{activeFilter}</strong>" right now.</div>
+              <div onClick={() => handleFilter("All")} style={{ marginTop: 8, fontSize: 13, color: C.blue, cursor: "pointer" }}>Show all stories</div>
+            </div>
+          )}
+          <Footer />
+        </div>
+      ) : activeStory ? (
+        <div>
+          <ThreadView story={activeStory} onBack={goHome} />
+          <Footer />
+        </div>
+      ) : (
+        <div style={{ padding: 40, textAlign: "center", color: C.meta }}>Story not found. <span onClick={goHome} style={{ color: C.blue, cursor: "pointer" }}>Go back</span></div>
+      )}
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(window.__App));
+  </script>
+</body>
+</html>
