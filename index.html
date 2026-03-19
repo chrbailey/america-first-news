@@ -562,193 +562,508 @@ const FeedEditor = ({ profile, onSave, onClose }) => {
 
 // ── SPORTS CARD GRADER COMPONENTS ──
 
-const CardGrader = ({ onSaveCard }) => {
-  const [playerName, setPlayerName] = useState("");
-  const [year, setYear] = useState("");
-  const [brand, setBrand] = useState("Topps");
-  const [cardNumber, setCardNumber] = useState("");
-  const [sport, setSport] = useState("Football");
+// ── CARD DATABASE ──
+const CARD_DATABASE = [
+  // Football - Key Rookies & Stars
+  { player: "Patrick Mahomes", year: 2017, brand: "Panini Prizm", set: "Prizm", cardNum: "269", sport: "Football", tier: "flagship", isRookie: true, baseValue: 800 },
+  { player: "Patrick Mahomes", year: 2017, brand: "Donruss Optic", set: "Optic Rated Rookie", cardNum: "177", sport: "Football", tier: "premium", isRookie: true, baseValue: 400 },
+  { player: "Patrick Mahomes", year: 2017, brand: "Panini Select", set: "Select", cardNum: "118", sport: "Football", tier: "premium", isRookie: true, baseValue: 200 },
+  { player: "Josh Allen", year: 2018, brand: "Panini Prizm", set: "Prizm", cardNum: "205", sport: "Football", tier: "flagship", isRookie: true, baseValue: 350 },
+  { player: "Josh Allen", year: 2018, brand: "Donruss Optic", set: "Optic Rated Rookie", cardNum: "154", sport: "Football", tier: "premium", isRookie: true, baseValue: 150 },
+  { player: "Lamar Jackson", year: 2018, brand: "Panini Prizm", set: "Prizm", cardNum: "212", sport: "Football", tier: "flagship", isRookie: true, baseValue: 200 },
+  { player: "Joe Burrow", year: 2020, brand: "Panini Prizm", set: "Prizm", cardNum: "307", sport: "Football", tier: "flagship", isRookie: true, baseValue: 250 },
+  { player: "Joe Burrow", year: 2020, brand: "Donruss Optic", set: "Optic Rated Rookie", cardNum: "151", sport: "Football", tier: "premium", isRookie: true, baseValue: 120 },
+  { player: "Justin Herbert", year: 2020, brand: "Panini Prizm", set: "Prizm", cardNum: "325", sport: "Football", tier: "flagship", isRookie: true, baseValue: 200 },
+  { player: "Trevor Lawrence", year: 2021, brand: "Panini Prizm", set: "Prizm", cardNum: "331", sport: "Football", tier: "flagship", isRookie: true, baseValue: 100 },
+  { player: "CJ Stroud", year: 2023, brand: "Panini Prizm", set: "Prizm", cardNum: "301", sport: "Football", tier: "flagship", isRookie: true, baseValue: 150 },
+  { player: "Caleb Williams", year: 2024, brand: "Panini Prizm", set: "Prizm Draft", cardNum: "101", sport: "Football", tier: "flagship", isRookie: true, baseValue: 80 },
+  { player: "Jayden Daniels", year: 2024, brand: "Panini Prizm", set: "Prizm Draft", cardNum: "102", sport: "Football", tier: "flagship", isRookie: true, baseValue: 60 },
+  { player: "Tom Brady", year: 2000, brand: "Playoff Contenders", set: "Contenders", cardNum: "144", sport: "Football", tier: "legendary", isRookie: true, baseValue: 15000 },
+  { player: "Tom Brady", year: 2000, brand: "Bowman", set: "Bowman", cardNum: "236", sport: "Football", tier: "premium", isRookie: true, baseValue: 3000 },
+  { player: "Peyton Manning", year: 1998, brand: "Topps", set: "Topps", cardNum: "360", sport: "Football", tier: "flagship", isRookie: true, baseValue: 300 },
+  { player: "Travis Kelce", year: 2013, brand: "Topps Chrome", set: "Chrome", cardNum: "118", sport: "Football", tier: "premium", isRookie: true, baseValue: 300 },
+  { player: "Tyreek Hill", year: 2016, brand: "Panini Prizm", set: "Prizm", cardNum: "242", sport: "Football", tier: "flagship", isRookie: true, baseValue: 200 },
+
+  // Baseball - Key Rookies & Stars
+  { player: "Mike Trout", year: 2011, brand: "Topps Update", set: "Topps Update", cardNum: "US175", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 2500 },
+  { player: "Mike Trout", year: 2009, brand: "Bowman Chrome", set: "Bowman Chrome Draft", cardNum: "BDPP89", sport: "Baseball", tier: "prospect", isRookie: false, baseValue: 3000 },
+  { player: "Shohei Ohtani", year: 2018, brand: "Topps", set: "Topps", cardNum: "700", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 500 },
+  { player: "Shohei Ohtani", year: 2018, brand: "Topps Chrome", set: "Topps Chrome", cardNum: "150", sport: "Baseball", tier: "premium", isRookie: true, baseValue: 800 },
+  { player: "Juan Soto", year: 2018, brand: "Topps Update", set: "Topps Update", cardNum: "US300", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 200 },
+  { player: "Ronald Acuna Jr", year: 2018, brand: "Topps Update", set: "Topps Update", cardNum: "US250", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 300 },
+  { player: "Bryce Harper", year: 2012, brand: "Topps", set: "Topps", cardNum: "661", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 150 },
+  { player: "Derek Jeter", year: 1993, brand: "SP", set: "Upper Deck SP", cardNum: "279", sport: "Baseball", tier: "legendary", isRookie: true, baseValue: 5000 },
+  { player: "Ken Griffey Jr", year: 1989, brand: "Upper Deck", set: "Upper Deck", cardNum: "1", sport: "Baseball", tier: "legendary", isRookie: true, baseValue: 1500 },
+  { player: "Gunnar Henderson", year: 2023, brand: "Topps", set: "Topps", cardNum: "295", sport: "Baseball", tier: "flagship", isRookie: true, baseValue: 80 },
+
+  // Basketball - Key Rookies & Stars
+  { player: "Luka Doncic", year: 2018, brand: "Panini Prizm", set: "Prizm", cardNum: "280", sport: "Basketball", tier: "flagship", isRookie: true, baseValue: 1200 },
+  { player: "Victor Wembanyama", year: 2023, brand: "Panini Prizm", set: "Prizm", cardNum: "248", sport: "Basketball", tier: "flagship", isRookie: true, baseValue: 400 },
+  { player: "Jayson Tatum", year: 2017, brand: "Panini Prizm", set: "Prizm", cardNum: "16", sport: "Basketball", tier: "flagship", isRookie: true, baseValue: 500 },
+  { player: "LeBron James", year: 2003, brand: "Topps Chrome", set: "Topps Chrome", cardNum: "111", sport: "Basketball", tier: "legendary", isRookie: true, baseValue: 25000 },
+  { player: "LeBron James", year: 2003, brand: "Upper Deck", set: "Upper Deck", cardNum: "301", sport: "Basketball", tier: "premium", isRookie: true, baseValue: 2000 },
+  { player: "Stephen Curry", year: 2009, brand: "Topps", set: "Topps", cardNum: "321", sport: "Basketball", tier: "flagship", isRookie: true, baseValue: 3000 },
+  { player: "Anthony Edwards", year: 2020, brand: "Panini Prizm", set: "Prizm", cardNum: "258", sport: "Basketball", tier: "flagship", isRookie: true, baseValue: 300 },
+  { player: "Michael Jordan", year: 1986, brand: "Fleer", set: "Fleer", cardNum: "57", sport: "Basketball", tier: "legendary", isRookie: true, baseValue: 30000 },
+];
+
+// ── GRADE MULTIPLIERS & PARALLELS ──
+const GRADE_MULTIPLIERS = {
+  "PSA 10": { mult: 8.0, label: "Gem Mint", color: "#16a34a" },
+  "PSA 9.5": { mult: 5.0, label: "Gem Mint", color: "#16a34a" },
+  "PSA 9": { mult: 3.0, label: "Mint", color: "#22c55e" },
+  "PSA 8.5": { mult: 2.0, label: "NM-MT+", color: "#84cc16" },
+  "PSA 8": { mult: 1.5, label: "NM-MT", color: "#eab308" },
+  "PSA 7": { mult: 1.0, label: "Near Mint", color: "#f59e0b" },
+  "PSA 6": { mult: 0.6, label: "EX-MT", color: "#f97316" },
+  "PSA 5": { mult: 0.4, label: "Excellent", color: "#ef4444" },
+  "PSA 4": { mult: 0.25, label: "VG-EX", color: "#dc2626" },
+  "PSA 3": { mult: 0.15, label: "Very Good", color: "#b91c1c" },
+  "PSA 2": { mult: 0.08, label: "Good", color: "#991b1b" },
+  "PSA 1": { mult: 0.03, label: "Poor", color: "#7f1d1d" },
+  "Raw": { mult: 0.7, label: "Ungraded", color: "#6b7280" },
+};
+
+const PARALLEL_MULTIPLIERS = {
+  "Base": 1.0,
+  "Silver Prizm": 4.0,
+  "Blue Prizm /199": 6.0,
+  "Red Prizm /99": 10.0,
+  "Gold Prizm /10": 40.0,
+  "Black Prizm 1/1": 150.0,
+  "Refractor": 3.0,
+  "Gold Refractor /50": 15.0,
+  "Orange /25": 20.0,
+  "Superfractor 1/1": 200.0,
+  "Auto": 5.0,
+  "Auto /99": 12.0,
+  "Auto /25": 30.0,
+  "Auto 1/1": 100.0,
+};
+
+// ── CARD SEARCH COMPONENT ──
+const CardSearch = ({ onSelectCard }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedSport, setSelectedSport] = useState("All");
+
+  const filteredCards = useMemo(() => {
+    let result = [...CARD_DATABASE];
+    if (selectedSport !== "All") {
+      result = result.filter(c => c.sport === selectedSport);
+    }
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(c => c.player.toLowerCase().includes(term));
+    }
+    return result;
+  }, [searchTerm, selectedSport]);
+
+  const sports = ["All", "Football", "Baseball", "Basketball"];
+
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Search Cards</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 4 }}>Player Name</label>
+          <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="e.g., Patrick Mahomes" style={{
+            width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4
+          }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 4 }}>Sport</label>
+          <select value={selectedSport} onChange={e => setSelectedSport(e.target.value)} style={{
+            width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4
+          }}>
+            {sports.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12, color: C.meta, marginBottom: 12 }}>
+        Found {filteredCards.length} card{filteredCards.length !== 1 ? "s" : ""}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+        {filteredCards.map((card, i) => (
+          <div key={i} onClick={() => onSelectCard(card)} style={{
+            backgroundColor: C.card, border: "1px solid #d1d5db", borderRadius: 6, padding: "12px",
+            cursor: "pointer", transition: "all 0.2s", textAlign: "center"
+          }} onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)"} onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}>
+            <div style={{ fontSize: 10, color: C.meta, marginBottom: 4 }}>
+              {card.year} {card.brand}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 6 }}>
+              {card.player}
+            </div>
+            <div style={{
+              width: 50, height: 50, margin: "0 auto 8px", borderRadius: 4, backgroundColor: "#f3f4f6",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20
+            }}>🃏</div>
+            <div style={{ fontSize: 9, color: C.meta, marginBottom: 4 }}>
+              {card.set} #{card.cardNum}
+            </div>
+            <div style={{ display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 8, backgroundColor: "#dbeafe", color: C.blue, padding: "2px 6px", borderRadius: 3, fontWeight: 600 }}>
+                {card.sport}
+              </span>
+              {card.isRookie && (
+                <span style={{ fontSize: 8, backgroundColor: C.red, color: "#fff", padding: "2px 6px", borderRadius: 3, fontWeight: 600 }}>
+                  RC
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── CARD INTELLIGENCE COMPONENT ──
+const CardIntelligence = ({ card, onBack }) => {
+  const [selectedGrade, setSelectedGrade] = useState("PSA 9");
+  const [selectedParallel, setSelectedParallel] = useState("Base");
+  const [newsHeadlines, setNewsHeadlines] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [showSelfGrade, setShowSelfGrade] = useState(false);
   const [centering, setCentering] = useState(7);
   const [corners, setCorners] = useState(7);
   const [edges, setEdges] = useState(7);
   const [surface, setSurface] = useState(7);
 
-  const computeGrade = () => {
+  // Fetch news on mount
+  useEffect(() => {
+    setNewsLoading(true);
+    const query = `"${card.player}" "sports card" OR PSA OR value`;
+    const feedUrl = buildFeedUrl(query);
+    fetchFeed(feedUrl).then(items => {
+      setNewsHeadlines(items.slice(0, 4));
+      setNewsLoading(false);
+    }).catch(() => setNewsLoading(false));
+  }, [card]);
+
+  const computeSelfGrade = () => {
     const grade = (centering * 0.15 + corners * 0.30 + edges * 0.25 + surface * 0.30);
-    return Math.round(grade * 2) / 2; // round to nearest 0.5
+    return Math.round(grade * 2) / 2;
   };
 
-  const gradeToLabel = (g) => {
-    if (g >= 9.5) return "Gem Mint";
-    if (g >= 9) return "Mint";
-    if (g >= 8.5) return "NM-MT+";
-    if (g >= 8) return "NM-MT";
-    if (g >= 7) return "NM";
-    if (g >= 6) return "EX-MT";
-    if (g >= 5) return "EX";
-    if (g >= 4) return "VG-EX";
-    if (g >= 3) return "VG";
-    if (g >= 2) return "Good";
-    return "Poor";
+  const calculateValue = (grade, parallel) => {
+    const gradeKey = Object.keys(GRADE_MULTIPLIERS).find(k => GRADE_MULTIPLIERS[k].label === GRADE_MULTIPLIERS[grade]?.label);
+    const gradeMult = GRADE_MULTIPLIERS[grade]?.mult || 1;
+    const parallelMult = PARALLEL_MULTIPLIERS[parallel] || 1;
+    return Math.round(card.baseValue * gradeMult * parallelMult);
   };
 
-  const gradeToMultiplier = (g) => {
-    if (g >= 9.5) return "10-15x";
-    if (g >= 9) return "5-10x";
-    if (g >= 8) return "2-5x";
-    if (g >= 7) return "1-2x";
-    return "0.5-1x";
-  };
+  const gradeKeys = Object.keys(GRADE_MULTIPLIERS);
+  const displayGrades = ["PSA 10", "PSA 9", "PSA 8", "PSA 7", "Raw"];
 
-  const computedGrade = computeGrade();
-  const label = gradeToLabel(computedGrade);
-
-  const handleSave = () => {
-    if (!playerName || !year) {
-      alert("Please fill in player name and year");
-      return;
-    }
-    onSaveCard({
-      playerName, year, brand, cardNumber, sport,
-      centering, corners, edges, surface, grade: computedGrade, label
-    });
-    setPlayerName("");
-    setYear("");
-    setCardNumber("");
-    setCentering(7);
-    setCorners(7);
-    setEdges(7);
-    setSurface(7);
-  };
+  // Generate investment signal
+  const isLegendary = card.tier === "legendary";
+  const isRookie = card.isRookie;
+  const isVintage = card.year < 2000;
+  const investmentSignal = isRookie && !isLegendary ? "BUY" : isLegendary ? "HOLD" : isVintage ? "HOLD" : "HOLD";
+  const signalColor = investmentSignal === "BUY" ? C.green : investmentSignal === "SELL" ? C.red : C.meta;
 
   return (
-    <div style={{ padding: "16px 20px", backgroundColor: C.card }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Grade a Card</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Player Name *</label>
-          <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="e.g., Tom Brady" style={{
-            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
-          }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Year *</label>
-          <input type="text" value={year} onChange={e => setYear(e.target.value)} placeholder="e.g., 2000" style={{
-            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
-          }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Brand</label>
-          <select value={brand} onChange={e => setBrand(e.target.value)} style={{
-            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
-          }}>
-            <option>Topps</option>
-            <option>Panini</option>
-            <option>Upper Deck</option>
-            <option>Bowman</option>
-            <option>Donruss</option>
-            <option>Fleer</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Card #</label>
-          <input type="text" value={cardNumber} onChange={e => setCardNumber(e.target.value)} placeholder="e.g., 1" style={{
-            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
-          }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>Sport</label>
-          <select value={sport} onChange={e => setSport(e.target.value)} style={{
-            width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 4
-          }}>
-            <option>Football</option>
-            <option>Baseball</option>
-            <option>Basketball</option>
-            <option>Hockey</option>
-          </select>
-        </div>
-      </div>
+    <div className="fade-in" style={{ paddingBottom: 40 }}>
+      <button onClick={onBack} style={{
+        margin: "16px 20px 0", padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+        backgroundColor: "#f1f5f9", color: C.meta, border: "1px solid #d1d5db", borderRadius: 4
+      }}>← Back to Search</button>
 
-      <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 12 }}>Condition Assessment</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {[
-          { label: "Centering", val: centering, set: setCentering, desc: "How well centered is the image?" },
-          { label: "Corners", val: corners, set: setCorners, desc: "Sharpness of corners" },
-          { label: "Edges", val: edges, set: setEdges, desc: "Condition of edges" },
-          { label: "Surface", val: surface, set: setSurface, desc: "Surface quality (no scratches)" }
-        ].map(({ label, val, set, desc }) => (
-          <div key={label}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.navy, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 10, color: C.meta, marginBottom: 6 }}>{desc}</div>
-            <input type="range" min="0" max="10" step="0.5" value={val} onChange={e => set(parseFloat(e.target.value))} style={{ width: "100%", marginBottom: 4 }} />
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.navy }}>{val} / 10</div>
+      <div style={{ margin: "16px 20px 0" }}>
+        {/* Header */}
+        <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+            <div style={{
+              width: 80, height: 100, borderRadius: 4, backgroundColor: "#f3f4f6",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40
+            }}>🃏</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.navy, marginBottom: 4 }}>{card.player}</div>
+              <div style={{ fontSize: 12, color: C.meta, marginBottom: 8 }}>
+                {card.year} {card.brand} {card.set} #{card.cardNum}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, backgroundColor: "#dbeafe", color: C.blue, padding: "4px 8px", borderRadius: 3, fontWeight: 600 }}>
+                  {card.sport}
+                </span>
+                {card.isRookie && (
+                  <span style={{ fontSize: 10, backgroundColor: C.red, color: "#fff", padding: "4px 8px", borderRadius: 3, fontWeight: 600 }}>
+                    ROOKIE CARD
+                  </span>
+                )}
+                <span style={{ fontSize: 10, backgroundColor: "#f3f4f6", color: C.navy, padding: "4px 8px", borderRadius: 3, fontWeight: 600 }}>
+                  {card.tier.toUpperCase()}
+                </span>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div style={{ padding: "16px", backgroundColor: "#f3f4f6", borderRadius: 6, marginBottom: 16, textAlign: "center" }}>
-        <div style={{ fontSize: 11, color: C.meta, marginBottom: 8 }}>Computed Grade (PSA Scale)</div>
-        <div style={{ fontSize: 32, fontWeight: 700, color: C.red, marginBottom: 4 }}>{computedGrade}</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.navy, marginBottom: 8 }}>{label}</div>
-        <div style={{ fontSize: 11, color: C.meta }}>Est. Value Multiplier: {gradeToMultiplier(computedGrade)}</div>
-      </div>
+        {/* Value Matrix */}
+        <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 12, color: C.navy }}>Value Matrix by Grade</div>
 
-      <button onClick={handleSave} style={{
-        width: "100%", padding: "10px", backgroundColor: C.green, color: "#fff", border: "none",
-        borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: "pointer"
-      }}>Save to Collection</button>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: C.navy, display: "block", marginBottom: 6 }}>Parallel Version</label>
+            <select value={selectedParallel} onChange={e => setSelectedParallel(e.target.value)} style={{
+              width: "100%", padding: "8px 12px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4
+            }}>
+              {Object.keys(PARALLEL_MULTIPLIERS).map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 }}>
+            {displayGrades.map(grade => {
+              const value = calculateValue(grade, selectedParallel);
+              const mult = GRADE_MULTIPLIERS[grade]?.mult || 0.7;
+              return (
+                <div key={grade} style={{
+                  padding: "12px", backgroundColor: "#f9fafb", borderRadius: 4, border: "1px solid #e5e7eb",
+                  textAlign: "center"
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: C.navy, marginBottom: 4 }}>{grade}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.red, marginBottom: 4 }}>
+                    ${value.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 9, color: C.meta }}>({mult}x base)</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Market Pulse */}
+        <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 12, color: C.navy }}>Market Pulse</div>
+          {newsLoading ? (
+            <div style={{ textAlign: "center", color: C.meta, fontSize: 12 }}>Fetching headlines...</div>
+          ) : newsHeadlines.length > 0 ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              {newsHeadlines.map((item, i) => (
+                <div key={i} style={{
+                  padding: "10px", backgroundColor: "#f9fafb", borderRadius: 4, borderLeft: `3px solid ${C.blue}`
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.navy, marginBottom: 2, lineHeight: 1.4 }}>
+                    {item.title.slice(0, 70)}...
+                  </div>
+                  <div style={{ fontSize: 9, color: C.meta }}>{item.source}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: C.meta }}>No recent news found for this card.</div>
+          )}
+        </div>
+
+        {/* Investment Analysis */}
+        <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 12, color: C.navy }}>Investment Analysis</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px", backgroundColor: "#f9fafb", borderRadius: 4 }}>
+              <span style={{ fontSize: 11, color: C.navy, fontWeight: 600 }}>Tier:</span>
+              <span style={{ fontSize: 11, color: C.meta }}>{card.tier.toUpperCase()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px", backgroundColor: "#f9fafb", borderRadius: 4 }}>
+              <span style={{ fontSize: 11, color: C.navy, fontWeight: 600 }}>Status:</span>
+              <span style={{ fontSize: 11, color: C.meta }}>{card.isRookie ? "ROOKIE" : "VETERAN"}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "8px", backgroundColor: "#f9fafb", borderRadius: 4 }}>
+              <span style={{ fontSize: 11, color: C.navy, fontWeight: 600 }}>Age:</span>
+              <span style={{ fontSize: 11, color: C.meta }}>{2026 - card.year} years old {card.year < 2000 ? "(VINTAGE)" : ""}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "12px", backgroundColor: "#f0fdf4", borderRadius: 4, border: `2px solid ${signalColor}`, marginTop: 8 }}>
+              <span style={{ fontSize: 12, color: C.navy, fontWeight: 700 }}>Signal:</span>
+              <span style={{ fontSize: 12, color: signalColor, fontWeight: 700 }}>{investmentSignal}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Self-Grade Tool */}
+        <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, marginBottom: 12, border: "1px solid #e5e7eb" }}>
+          <div onClick={() => setShowSelfGrade(!showSelfGrade)} style={{
+            fontSize: 12, fontWeight: 600, color: C.navy, cursor: "pointer", marginBottom: 12,
+            display: "flex", justifyContent: "space-between", alignItems: "center"
+          }}>
+            <span>Self-Grade Tool</span>
+            <span style={{ fontSize: 10 }}>{showSelfGrade ? "−" : "+"}</span>
+          </div>
+
+          {showSelfGrade && (
+            <div>
+              <div style={{ fontSize: 10, color: C.meta, marginBottom: 12 }}>
+                Assess your card's condition and see estimated value if graded
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                {[
+                  { label: "Centering", val: centering, set: setCentering, desc: "Image centered on card?" },
+                  { label: "Corners", val: corners, set: setCorners, desc: "Sharp corners?" },
+                  { label: "Edges", val: edges, set: setEdges, desc: "Clean edges?" },
+                  { label: "Surface", val: surface, set: setSurface, desc: "No scratches?" }
+                ].map(({ label, val, set, desc }) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.navy, marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 9, color: C.meta, marginBottom: 4 }}>{desc}</div>
+                    <input type="range" min="0" max="10" step="0.5" value={val} onChange={e => set(parseFloat(e.target.value))} style={{ width: "100%", marginBottom: 4 }} />
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.red }}>{val} / 10</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ padding: "12px", backgroundColor: "#f0fdf4", borderRadius: 4, textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: C.meta, marginBottom: 4 }}>Estimated Grade</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, marginBottom: 6 }}>
+                  {computeSelfGrade().toFixed(1)}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.navy }}>
+                  If graded: ${calculateValue("PSA " + Math.floor(computeSelfGrade()), selectedParallel).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
 
-const CollectionView = ({ cards, onSort }) => {
-  const [sortBy, setSortBy] = useState("grade");
-  const sorted = [...cards].sort((a, b) => {
-    if (sortBy === "grade") return b.grade - a.grade;
-    if (sortBy === "name") return a.playerName.localeCompare(b.playerName);
-    if (sortBy === "year") return parseInt(b.year) - parseInt(a.year);
-    return 0;
-  });
+// ── COLLECTION VIEW (ENHANCED) ──
+const CollectionView = ({ cards, onSelectCard }) => {
+  const [sortBy, setSortBy] = useState("value");
 
-  const avgGrade = cards.length > 0 ? (cards.reduce((sum, c) => sum + c.grade, 0) / cards.length).toFixed(1) : 0;
+  const sorted = useMemo(() => {
+    let result = [...cards];
+    if (sortBy === "value") return result.sort((a, b) => (b.estimatedValue || 0) - (a.estimatedValue || 0));
+    if (sortBy === "name") return result.sort((a, b) => a.player.localeCompare(b.player));
+    if (sortBy === "year") return result.sort((a, b) => parseInt(b.year) - parseInt(a.year));
+    return result;
+  }, [cards, sortBy]);
+
+  const totalValue = cards.reduce((sum, c) => sum + (c.estimatedValue || 0), 0);
+  const sportBreakdown = useMemo(() => {
+    const breakdown = {};
+    cards.forEach(c => {
+      const card = CARD_DATABASE.find(db => db.player === c.player && db.year === c.year);
+      if (card) {
+        breakdown[card.sport] = (breakdown[card.sport] || 0) + (c.estimatedValue || 0);
+      }
+    });
+    return breakdown;
+  }, [cards]);
 
   return (
     <div style={{ padding: "16px 20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.navy }}>My Collection</div>
-          <div style={{ fontSize: 11, color: C.meta, marginTop: 2 }}>{cards.length} cards · Avg Grade: {avgGrade}</div>
-        </div>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
-          padding: "4px 8px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4
-        }}>
-          <option value="grade">Sort by Grade</option>
-          <option value="name">Sort by Name</option>
-          <option value="year">Sort by Year</option>
-        </select>
-      </div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>My Collection</div>
 
       {cards.length === 0 ? (
         <div style={{ padding: "20px", textAlign: "center", color: C.meta, backgroundColor: C.card, borderRadius: 6 }}>
-          <div style={{ fontSize: 13 }}>No cards graded yet. Start by grading a card above!</div>
+          <div style={{ fontSize: 13 }}>No cards in collection. Search and add cards from the database!</div>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
-          {sorted.map((card, i) => (
-            <div key={i} style={{
-              backgroundColor: C.card, border: "1px solid #e5e7eb", borderRadius: 6, padding: "12px",
-              textAlign: "center"
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ padding: "12px", backgroundColor: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0" }}>
+              <div style={{ fontSize: 11, color: "#15803d", fontWeight: 600, marginBottom: 4 }}>Total Value</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.green }}>${totalValue.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: C.meta, marginTop: 2 }}>{cards.length} cards</div>
+            </div>
+
+            <div style={{ padding: "12px", backgroundColor: "#eff6ff", borderRadius: 6, border: "1px solid #bfdbfe" }}>
+              <div style={{ fontSize: 11, color: C.blue, fontWeight: 600, marginBottom: 8 }}>By Sport</div>
+              <div style={{ display: "grid", gap: 4 }}>
+                {Object.entries(sportBreakdown).map(([sport, value]) => (
+                  <div key={sport} style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}>
+                    <span style={{ color: C.navy, fontWeight: 600 }}>{sport}:</span>
+                    <span style={{ color: C.meta }}>${value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 12, color: C.meta }}>Showing {sorted.length} cards</div>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+              padding: "6px 10px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4
             }}>
-              <div style={{ fontSize: 10, color: C.meta, marginBottom: 4 }}>{card.year} {card.brand}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 8 }}>{card.playerName}</div>
-              <div style={{
-                width: 60, height: 60, margin: "0 auto 8px", borderRadius: 4, backgroundColor: "#f3f4f6",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24
-              }}>🃏</div>
-              <div style={{
-                fontSize: 18, fontWeight: 700, color: C.red, marginBottom: 4
-              }}>{card.grade}</div>
-              <div style={{ fontSize: 10, color: C.meta }}>{card.label}</div>
+              <option value="value">Sort by Value</option>
+              <option value="name">Sort by Name</option>
+              <option value="year">Sort by Year</option>
+            </select>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+            {sorted.map((card, i) => (
+              <div key={i} onClick={() => onSelectCard(card)} style={{
+                backgroundColor: C.card, border: "1px solid #e5e7eb", borderRadius: 6, padding: "12px",
+                cursor: "pointer", textAlign: "center"
+              }}>
+                <div style={{ fontSize: 10, color: C.meta, marginBottom: 4 }}>{card.year}</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.navy, marginBottom: 8 }}>{card.player}</div>
+                <div style={{
+                  width: 50, height: 50, margin: "0 auto 8px", borderRadius: 4, backgroundColor: "#f3f4f6",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20
+                }}>🃏</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 2 }}>
+                  ${(card.estimatedValue || 0).toLocaleString()}
+                </div>
+                <div style={{ fontSize: 9, color: C.meta }}>Est. Value</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── MARKET INTEL ──
+const MarketIntel = () => {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const queries = [
+      "sports card market trends 2025 2026",
+      "PSA grading card value",
+      "rookie card investment"
+    ];
+
+    Promise.allSettled(queries.map(q => fetchFeed(buildFeedUrl(q)))).then(results => {
+      const all = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
+      const seen = new Set();
+      const unique = all.filter(item => {
+        if (!item.title) return false;
+        const key = item.title.toLowerCase().slice(0, 40);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setNews(unique.slice(0, 6));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Market Intel</div>
+      {loading ? (
+        <div style={{ textAlign: "center", color: C.meta, fontSize: 12 }}>Fetching market news...</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {news.map((item, i) => (
+            <div key={i} style={{
+              padding: "12px", backgroundColor: C.card, borderRadius: 6, border: "1px solid #e5e7eb",
+              borderLeft: `4px solid ${C.blue}`
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, lineHeight: 1.4 }}>
+                {item.title.slice(0, 80)}
+              </div>
+              <div style={{ fontSize: 10, color: C.meta }}>{item.source}</div>
             </div>
           ))}
         </div>
@@ -757,35 +1072,31 @@ const CollectionView = ({ cards, onSort }) => {
   );
 };
 
+// ── CARD DASHBOARD ──
 const CardDashboard = ({ profile, onSaveProfile }) => {
-  const [tab, setTab] = useState("grade");
-  const [cards, setCards] = useState(() => {
-    try {
-      return JSON.parse(profile.cardCollections || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [tab, setTab] = useState("search");
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [collection, setCollection] = useState([]);
 
-  const handleSaveCard = (card) => {
-    const updated = [...cards, card];
-    setCards(updated);
+  const handleAddCard = (card) => {
+    const value = GRADE_MULTIPLIERS["PSA 9"].mult * card.baseValue;
+    setCollection([...collection, { ...card, estimatedValue: value }]);
   };
 
   return (
     <div style={{ paddingBottom: 40 }}>
       <div style={{ display: "flex", gap: 2, backgroundColor: C.card, borderBottom: "1px solid #e5e7eb" }}>
         {[
-          { id: "grade", label: "Grade a Card", emoji: "✏️" },
+          { id: "search", label: "Card Search", emoji: "🔍" },
           { id: "collection", label: "My Collection", emoji: "📚" },
           { id: "market", label: "Market Intel", emoji: "📊" },
           { id: "guide", label: "Grading Guide", emoji: "📖" }
         ].map(({ id, label, emoji }) => (
-          <div key={id} onClick={() => setTab(id)} style={{
+          <div key={id} onClick={() => { setTab(id); setSelectedCard(null); }} style={{
             flex: 1, padding: "12px 16px", textAlign: "center", cursor: "pointer",
-            backgroundColor: tab === id ? C.navy : "transparent",
-            color: tab === id ? "#fff" : C.meta,
-            fontWeight: tab === id ? 600 : 400,
+            backgroundColor: tab === id && !selectedCard ? C.navy : "transparent",
+            color: tab === id && !selectedCard ? "#fff" : C.meta,
+            fontWeight: tab === id && !selectedCard ? 600 : 400,
             fontSize: 12
           }}>
             {emoji} {label}
@@ -793,17 +1104,15 @@ const CardDashboard = ({ profile, onSaveProfile }) => {
         ))}
       </div>
 
-      {tab === "grade" && <CardGrader onSaveCard={handleSaveCard} />}
-      {tab === "collection" && <CollectionView cards={cards} />}
-      {tab === "market" && (
-        <div style={{ padding: "16px 20px" }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Market Intel</div>
-          <div style={{ padding: "16px", backgroundColor: C.card, borderRadius: 6, color: C.meta, fontSize: 12 }}>
-            Sports card market news and trending values coming from live RSS feeds. Popular brands like PSA-graded cards typically see 5-10x premium for gem mint condition. Keep an eye on rookie cards and star players for emerging trends.
-          </div>
-        </div>
-      )}
-      {tab === "guide" && (
+      {selectedCard ? (
+        <CardIntelligence card={selectedCard} onBack={() => setSelectedCard(null)} />
+      ) : tab === "search" ? (
+        <CardSearch onSelectCard={setSelectedCard} />
+      ) : tab === "collection" ? (
+        <CollectionView cards={collection} onSelectCard={setSelectedCard} />
+      ) : tab === "market" ? (
+        <MarketIntel />
+      ) : tab === "guide" ? (
         <div style={{ padding: "16px 20px" }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: C.navy }}>Grading Guide</div>
           <div style={{ display: "grid", gap: 12 }}>
@@ -811,11 +1120,11 @@ const CardDashboard = ({ profile, onSaveProfile }) => {
               { grade: "10", label: "Gem Mint", desc: "Virtually perfect card. Flawless centering, sharp corners, pristine surface." },
               { grade: "9", label: "Mint", desc: "Excellent card with minor imperfections only visible under magnification." },
               { grade: "8", label: "NM-MT", desc: "Sharp corners and clean surface. Slight imperfections when examined closely." },
-              { grade: "7", label: "NM", desc: "Nice card with well-centered image. Minor wear visible but overall attractive." },
+              { grade: "7", label: "Near Mint", desc: "Nice card with well-centered image. Minor wear visible but overall attractive." },
               { grade: "6", label: "EX-MT", desc: "Good card with visible wear. Edges and corners show slight rounding." },
-              { grade: "5", label: "EX", desc: "Notable wear on all condition factors. Still displays well overall." },
+              { grade: "5", label: "Excellent", desc: "Notable wear on all condition factors. Still displays well overall." },
               { grade: "4", label: "VG-EX", desc: "Significant wear. Heavy corner/edge wear, possible creasing." },
-              { grade: "3", label: "VG", desc: "Well-played card. Heavy wear throughout." },
+              { grade: "3", label: "Very Good", desc: "Well-played card. Heavy wear throughout." },
             ].map(({ grade, label, desc }) => (
               <div key={grade} style={{ backgroundColor: C.card, padding: "12px", borderRadius: 6, borderLeft: `4px solid ${C.red}` }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4 }}>{grade}/10 — {label}</div>
@@ -824,7 +1133,7 @@ const CardDashboard = ({ profile, onSaveProfile }) => {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };
